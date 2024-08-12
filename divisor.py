@@ -17,12 +17,21 @@ with csv_path.open('r', encoding='utf-8') as file_in:
         writer = csv.writer(file_out)
         
         for row_in in reader:
+           
+           # Verifica o semestre do ano e o curso
            if row_in[6] == '2010/1' and row_in[0] == 'ANÁLISE DE SISTEMAS - BACHARELADO':
+                
+                # Combina os valores que não podem se repetir  (RGA, Ano/Semestre, disciplina, curso) 
                 combinacao = (row_in[6], row_in[7], row_in[0], row_in[1], row_in[2])
+
+                # Saida com os dados relevantes 
                 saida = row_in[0:3] + [row_in[7]] + row_in[8:13]
+
+                # Se row não existir no arquivo de saída, escreve o novo
                 if combinacao not in valores_unicos:
                     writer.writerow(saida)
                     valores_unicos.add(combinacao)
+                # Se existir, só pega o horário da disciplina e o nome dela
                 else:
                      writer.writerow(row_in[7:11])
        
