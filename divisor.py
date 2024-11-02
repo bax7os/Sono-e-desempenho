@@ -19,10 +19,11 @@ with csv_path.open('r', encoding='utf-8') as file_in:
         writer = csv.writer(file_out)
         cont = 0
         for row_in in reader:
-           cont += 1
-           # Verifica o semestre do ano e o curso
-           if row_in[6] == "2010/1" and row_in[0] == 'ANÁLISE DE SISTEMAS - BACHARELADO':
-                
+            cont += 1
+            # Verifica o semestre do ano e o curso
+            if row_in[8] != "EAD":
+                #if row_in[6] == "2010/1" and row_in[0] == 'ANÁLISE DE SISTEMAS - BACHARELADO':
+                            
                 # Combina os valores que não podem se repetir  (RGA, Ano/Semestre, disciplina, curso) 
                 combinacao = (row_in[6], row_in[7], row_in[0], row_in[1], row_in[2])
 
@@ -33,14 +34,16 @@ with csv_path.open('r', encoding='utf-8') as file_in:
                 if combinacao not in valores_unicos:
                     
                     writer.writerow(saida)
-              
+            
                     valores_unicos.add(combinacao)
                 # Se existir, só pega o horário da disciplina e o nome dela
                 else:
-                     writer.writerow(row_in[7:11])
+                    writer.writerow(row_in[7:11])
 
 # Removendo linhas duplicadas dos horários        
 
 df = pd.read_csv(csv_path_out)
 df_sem_duplicatas = df.drop_duplicates()
 df_sem_duplicatas.to_csv(csv_path_out, index=False)
+
+
