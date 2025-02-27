@@ -91,7 +91,7 @@ with csv_path.open('r', encoding='utf-8') as file_in:
                     
                 # Combina os valores que não podem se repetir  (RGA, Ano/Semestre, disciplina, curso) 
                 combinacao = ( row_in[0], row_in[1], row_in[2],row_in[6], row_in[7])
-                print(combinacao)
+              
                 # Saida com os dados relevantes 
                 
                 time1 = datetime.strptime(row_in[9], formato).time() #converte o horario_inicio para datetime
@@ -110,6 +110,7 @@ with csv_path.open('r', encoding='utf-8') as file_in:
                         time_aux = datetime.strptime(horario2[0], formato).time()
                         if time1 <= time_aux:
                             pesos[combinacao] = 1
+                            #print(row_in[0:3] + row_in[6:13] + [cargas[combinacao], pesos[combinacao]])
                         else:
                             pesos[combinacao] = 1.5
                     elif horario_entre_aulas(row_in[9],horario1[1],horario2[0]): 
@@ -142,7 +143,7 @@ with csv_path.open('r', encoding='utf-8') as file_in:
                         else:
                             pesos[combinacao] = 4.5 
                     elif horario_entre_aulas(row_in[9],horario4[1],horario5[0]): 
-                        pesos[combinacao] = 4.5
+                        pesos[combinacao ] = 4.5
                     if horario_no_intervalo(row_in[9],horario5[0],horario5[1]): 
                         time_aux = datetime.strptime(horario6[0], formato).time()
                         if time1 <= time_aux:
@@ -166,6 +167,8 @@ with csv_path.open('r', encoding='utf-8') as file_in:
                         time_aux = datetime.strptime(horario2[0], formato).time()
                         if time1 <= time_aux:
                             pesos[combinacao] += 1
+                            if(cargas[combinacao] > 2):
+                                print(row_in[0:3] + row_in[6:13] + [cargas[combinacao], pesos[combinacao]])
                        
                     if horario_no_intervalo(row_in[9],horario2[0],horario2[1]): 
                         time_aux = datetime.strptime(horario3[0], formato).time()
@@ -190,14 +193,14 @@ with csv_path.open('r', encoding='utf-8') as file_in:
                         pesos[combinacao] += 6
 
                     saida = row_in[0:3] + row_in[6:13] + [cargas[combinacao], pesos[combinacao]]
-                    print(saida)
+                    #print(saida)
                     writer.writerow(saida)
            else:
                 nao_validos += 1
 
 # Removendo linhas duplicadas dos horários        
-print(cont)
-print(nao_validos)
+#print(cont)
+#print(nao_validos)
 df = pd.read_csv(csv_path_out)
 df_sem_duplicatas = df.drop_duplicates()
 df_sem_duplicatas.to_csv(csv_path_out, index=False)
