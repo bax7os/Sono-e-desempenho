@@ -6,6 +6,12 @@ from datetime import datetime, timedelta
 # Exemplo de caminho relativo usando pathlib
 csv_path = Path(__file__).parent / 'include' / 'dados.csv'
 csv_path_out = Path(__file__).parent / 'resultados' / 'resultados_tudo.csv'
+df2 = pd.read_csv(csv_path)
+df2_sem_duplicatas = df2.drop_duplicates()
+df2_sem_duplicatas.to_csv(csv_path, index=False)
+
+
+
 
 # Conjunto para rastrear valores únicos de row[2](RGA):
 # evita a repetição de notas de um aluno x, visto que se um alunos está em uma 
@@ -167,7 +173,7 @@ with csv_path.open('r', encoding='utf-8') as file_in:
                         time_aux = datetime.strptime(horario2[0], formato).time()
                         if time1 <= time_aux:
                             pesos[combinacao] += 1
-                            if(cargas[combinacao] > 2):
+                            if(cargas[combinacao] > 9):
                                 print(row_in[0:3] + row_in[6:13] + [cargas[combinacao], pesos[combinacao]])
                        
                     if horario_no_intervalo(row_in[9],horario2[0],horario2[1]): 
