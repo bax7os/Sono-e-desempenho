@@ -51,7 +51,7 @@ def encontrar_materias_irregulares(csv_path, csv_path_out):
 
     # dicionário para agrupar disciplinas por nome, seu semestre e curso
     disciplinas = {}
-
+    disciplinasForaDoRange = []
   
     with open(csv_path, 'r', encoding='utf-8') as file_in:
         reader = csv.reader(file_in)
@@ -89,7 +89,8 @@ def encontrar_materias_irregulares(csv_path, csv_path_out):
                     
                 horario_unico = (dia_semana)
                 disciplinas[chave]["horarios_unicos"].add(horario_unico)
-
+            else:
+                disciplinasForaDoRange.append(row)
     # escrever as matérias regulares em um novo arquivo
     with open(csv_path_out, 'w', newline='', encoding='utf-8') as file_out:
         writer = csv.writer(file_out)
@@ -106,12 +107,17 @@ def encontrar_materias_irregulares(csv_path, csv_path_out):
                     row.append(carga)
                     row.append(turnos)
                     writer.writerow(row)
+    
+    with open(csv_path_out_outras, 'w', newline='', encoding='utf-8') as file:
+        writer = csv.writer(file)
+        for row in disciplinasForaDoRange:
+            writer.writerow(row)
 
 
 # caminhos dos arquivos
 csv_path = Path(__file__).parent / 'include' / 'dados.csv'
 csv_path_out = Path(__file__).parent / 'resultados' / 'materias_irregulares.csv'
-
+csv_path_out_outras = Path(__file__).parent / 'resultados' / 'outras.csv'
 # executar a função
 encontrar_materias_irregulares(csv_path, csv_path_out)
-print("Matérias regulares foram salvas em:", csv_path_out)
+print("Matérias irregulares foram salvas em:", csv_path_out)
