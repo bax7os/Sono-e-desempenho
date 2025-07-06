@@ -47,67 +47,85 @@ def validar_formato_tempo(valor):
 # materias regulares = matérias que acontecem em um único turno
 # durante a semana
 
-def encontrar_disciplinas_com_poucos_alunos(csv_path, csv_path_out, min_alunos=1, max_alunos=5):
+# (O início da sua função)
+def filtrar_e_salvar_csv_sem_poucos_alunos(csv_path, csv_path_out, min_alunos=1, max_alunos=5):
     disciplinas = {}
-    disciplinasForaDoRange = []
-  
+    # ... (resto das variáveis)
+    
     with open(csv_path, 'r', encoding='utf-8') as file_in:
         reader = csv.reader(file_in)
-        next(reader) 
+        cabecalho = next(reader)
+        
+        # Para controlar o número de linhas a processar durante o teste
+        contador_linhas = 0
 
         for row in reader:
+            # (Seus filtros aqui)
             if row[8] != "EAD" and validar_formato_tempo(row[9]):    
                 nome_disciplina = row[7]
                 semestre = row[6]
-                curso = row[0]
-                horario_inicio = row[9]
-                dia_semana = row[8]
-
                 chave = (nome_disciplina, semestre)
+                
+                # Matrícula do aluno na linha atual
+                matricula_aluno_atual = row[2]
 
-                turno = determinar_turno(horario_inicio)
+                print(f"--- Processando Linha: ---")
+                print(f"Chave identificada: {chave}")
 
                 if chave not in disciplinas:
-                    disciplinas[chave] = {
-                        "turno": turno,
-                        "rows": [row],
-                        "horarios_unicos": set()
-                    }
+                    print(f"-> Chave é NOVA. Criando entrada para '{chave}'.")
+                    # Cria a chave e adiciona a PRIMEIRA linha inteira
+                    disciplinas[chave] = [row] 
+                    print(f"-> Estado ATUAL de '{chave}': {disciplinas[chave]}")
+
                 else:
-                    if disciplinas[chave]["turno"] != turno:
-                        disciplinas[chave]["turno"] = None
-                    disciplinas[chave]["rows"].append(row)
+                    print(f"-> Chave JÁ EXISTE: '{chave}'. Verificando se aluno '{matricula_aluno_atual}' já foi adicionado.")
+                    print(f"-> Estado ANTES da adição: {disciplinas[chave]}")
+
+                    # --- CORREÇÃO DO BUG ESTÁ AQUI ---
+                    # Precisamos verificar apenas a matrícula (índice 2) em cada linha já salva
+                    matriculas_ja_salvas = [linha_salva[2] for linha_salva in disciplinas[chave]]
                     
-                horario_unico = (dia_semana)
-                disciplinas[chave]["horarios_unicos"].add(horario_unico)
-            else:
-                disciplinasForaDoRange.append(row)
+                    if matricula_aluno_atual not in matriculas_ja_salvas:
+                        print(f"-> Aluno '{matricula_aluno_atual}' é NOVO para esta disciplina. Adicionando.")
+                        disciplinas[chave].append(row)
+                        print(f"-> Estado DEPOIS da adição: {disciplinas[chave]}")
+                    else:
+                        print(f"-> Aluno '{matricula_aluno_atual}' já existe na lista. Ignorando linha duplicada.")
+                
+                print("="*50) 
+
+            
     
-    # Filtrar disciplinas com número de alunos no intervalo desejado
-    disciplinas_filtradas = {
-        chave: dados for chave, dados in disciplinas.items() 
-        if min_alunos <= len(dados["rows"]) <= max_alunos
-    }
-    
-    # Escrever no arquivo de saída
+
+   
+    cabecalho_saida = ['Nome_Disciplina', 'Semestre', 'Quantidade_Alunos']
+
     with open(csv_path_out, 'w', newline='', encoding='utf-8') as file_out:
         writer = csv.writer(file_out)
-        # Escrever cabeçalho (opcional, se quiser manter o original)
-        writer.writerow(["Curso", "Semestre", "Disciplina", "Total Alunos", "Turno"])
-        
-        for chave, dados in disciplinas_filtradas.items():
-            nome_disciplina, semestre = chave
-            total_alunos = len(dados["rows"])
-            turno = dados["turno"]
+        writer.writerow(cabecalho_saida) 
+
+  
+        for chave, linhas in disciplinas.items():
+           
+            nome_disciplina = chave[0]
+            semestre = chave[1]
             
-            writer.writerow([curso, semestre, nome_disciplina, total_alunos, turno])
-    
-    print(f"Disciplinas com entre {min_alunos} e {max_alunos} alunos encontradas: {len(disciplinas_filtradas)}")
-    print(f"Arquivo salvo em: {csv_path_out}")
+     
+            quantidade_alunos = len(linhas)
+           
+            writer.writerow([nome_disciplina, semestre, quantidade_alunos])
+
+    print(f"Arquivo de resumo salvo em: {csv_path_out}")
+
+
+
+
 
 # Caminhos dos arquivos
-csv_path = Path(__file__).parent / 'include' / 'dados.csv'
-csv_path_out = Path(__file__).parent / 'resultados' / 'disciplinas_poucos_alunos.csv'
+csv_path = Path(__file__).parent / 'include' / 'teste.csv'
+csv_path_out = Path(__file__).parent / 'resultados' / 'numero_de_alunos.csv'
 
 # Executar a função
-encontrar_disciplinas_com_poucos_alunos(csv_path, csv_path_out)
+filtrar_e_salvar_csv_sem_poucos_alunos(csv_path, csv_path_out)
+
