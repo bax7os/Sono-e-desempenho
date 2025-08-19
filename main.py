@@ -1,7 +1,9 @@
 import pandas as pd
 from pathlib import Path
-from datetime import datetime
+from datetime import time
 import numpy as np
+import logging
+from typing import List
 
 MORNING_SHIFT = (time(7, 0, 0), time(11, 25, 0))
 AFTERNOON_SHIFT = (time(13, 0, 0), time(16, 59, 0))
@@ -28,10 +30,18 @@ TIME_WEIGHT = {
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+def is_time_in_valid_ranges(current_time: time) -> bool:
+    if not isinstance(current_time, time):
+        return False
+    
+    for start_time, end_time in TIME_WEIGHT.values():
+        if start_time <= current_time <= end_time:
+            return True
+    return False
 def is_time_in_range(time_to_check: time, interval: tuple[time, time]) -> bool:
         start_time, end_time = interval
         return start_time <= time_to_check <= end_time
-        
+      
 def get_shift(current_time: time):
     for shift, interval in SHIFTS.items():
         if is_time_in_range(current_time, interval):
@@ -41,25 +51,32 @@ def get_shift(current_time: time):
 def get_time_weight(current_time: time) -> int:
     for weight, interval in TIME_WEIGHT.items():
         if is_time_in_range(current_time, interval): return weight
+        
     raise ValueError(f"Time weight undefined for the time {current_time}.")
 
-def load_and_combine_csvs(input_paths: list[Path]) -> pd.DataFrame:
+def load_data_csv(input_path: Path) -> pd.DataFrame:
 
-        dfs = [pd.read_csv(path, encoding='utf-8') for path in input_paths if path.exists()]
-        if not dfs:
-            raise FileNotFoundError("Input files not found.")            
-            
-        combined_df = pd.concat(dfs, ignore_index=True)
-        header = combined_df.columns.tolist()
-        logging.info(f"Loading and combining {len(dfs)} CSV files.")
-        return combined_df
+        logging.info(f"Carregando dados de '{input_path}'...")
+
+        if not input_path:
+            raise FileNotFoundError(f"Arquivo nao encontrado em: '{input_path}'...")
+        
+        df = pd.read_csv(input_path, encoding='utf-8')
+        logging.info(f"Dados carregados com sucesso. Total de {len(df)} registros.")
+        return df
 
 def preprocess_data(df: pd.DataFrame) -> pd.DataFrame:
 
     df = df[df['Dia da Semana'] != 'EAD'].copy()
+   
 
     df['Horario-Inicio-Time'] = pd.to_datetime(df['Horário Início'], format='%H:%M:%S', errors='coerce').dt.time
     df.dropna(subset=['Horario-Inicio-Time'], inplace=True)
+
+    before_register = len(df)
+    df = df[df['Horario-Inicio-Time'].apply(is_time_in_valid_ranges)]
+    after_register = len(df)
+    logging.info(f"Removidos {before_register - after_register} registros de horarios invalidos.")
 
     df['Media-Final-Float'] = pd.to_numeric(df['Média Final'].astype(str).str.replace(',', '.'), errors='coerce')
 
@@ -129,73 +146,81 @@ def add_block_information(df: pd.DataFrame, blocks_map_path: str) -> pd.DataFram
         df['bloco'] = 'N/A'
     return df
 
-def save_to_csv(df: pd.DataFrame, output_path: str) -> None:
-    
+def format_data_for_output(df: pd.DataFrame) -> pd.DataFrame:
+
+    logging.info("Formatando colunas numéricas para o relatório final...")
+    df_formatted = df.copy() 
+
     format_cols = ['peso_final', 'media_disciplina', 'desvio_padrao', 'taxa_aprovacao', 'taxa_reprovacao']
     for col in format_cols:
-        if col in df_final.columns:
-            df_final[col] = df_final[col].map('{:.2f}'.format)
-
-    # Separação de turmas regulares e irregulares
-    is_regular = df_final['turnos_distintos'].apply(len) == 1
-
-    # Define as colunas para o arquivo de irregulares
-    col_irregulares = cabecalho_original + [
-        "bloco", "total_alunos_disciplina", "carga_semanal_dias",
-        "media_disciplina", "desvio_padrao", "taxa_aprovacao", "taxa_reprovacao"
-    ]
-    df_irregulares = df_final[~is_regular][[col for col in col_irregulares if col in df_final.columns]].drop_duplicates()
-
-    # Define as colunas para o arquivo de regulares
-    col_regulares = cabecalho_original + [
-        "bloco", "turno_predominante", "total_alunos_disciplina", 
-        "carga_semanal_dias", "peso_final", "media_disciplina", "desvio_padrao",
-        "taxa_aprovacao", "taxa_reprovacao"
-    ]
-    df_regulares = df_final[is_regular][[col for col in col_regulares if col in df_final.columns]].drop_duplicates()
-
-    # Salva os arquivos CSV
-    df_regulares.to_csv(caminho_saida_regulares, index=False, encoding='utf-8')
-    df_irregulares.to_csv(caminho_saida_irregulares, index=False, encoding='utf-8')
-
-    print("\nProcessamento concluído com sucesso.")
-    print(f"Matérias regulares salvas em: {caminho_saida_regulares}")
-    print(f"Matérias irregulares salvas em: {caminho_saida_irregulares}")
-
-
-def analise_csv(lista_caminhos_entrada, caminho_saida_regulares, caminho_saida_irregulares, mapa_blocos_path):
-   
-   
-
-   
-  
-  
-
+        if col in df_formatted.columns:
+            df_formatted[col] = df_formatted[col].map('{:.2f}'.format)
+    return df_formatted
+def separate_regular_and_irregular_classes(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     
+    logging.info("Separando turmas em regulares e irregulares...")
+    is_regular = df['turnos_distintos'].apply(len) == 1
 
-   
-    # Formatação das colunas numéricas para a saída
-   
+    regular_df = df[is_regular]
+    irregular_df = df[~is_regular]
 
+    return regular_df, irregular_df
+
+def prepare_and_save_csv(df: pd.DataFrame, columns_to_keep: List[str], output_path: Path):
+
+    final_columns = [col for col in columns_to_keep if col in df.columns]
+    
+    output_df = df[final_columns].drop_duplicates()
+    
+    output_df.to_csv(output_path, index=False, encoding='utf-8')
+    logging.info(f"Relatório salvo com sucesso em: {output_path}")
+
+def run_analysis_pipeline(input_path: Path, regular_output_path: Path, irregular_output_path: Path, blocks_map_path: Path):
+    try:
+        raw_df = load_data_csv(input_path)
+        original_header = raw_df.columns.tolist()
+
+        processed_df = preprocess_data(raw_df)
+        
+        rates_df = calculate_approval_rates(processed_df)
+        class_metrics_df = aggregate_class_metrics(processed_df)
+        class_metrics_df = class_metrics_df.merge(rates_df, on=GRADE_KEY_COLS, how='left')
+
+        df_with_metrics = merge_classes_metrics(processed_df, class_metrics_df)
+        df_with_derived_metrics = calculate_derived_metrics(df_with_metrics)
+        final_df = add_block_information(df_with_derived_metrics, blocks_map_path)
+
+        formatted_df = format_data_for_output(final_df)
+        regular_df, irregular_df = separate_regular_and_irregular_classes(formatted_df)
+
+        base_metrics = ["bloco", "total_alunos_disciplina", "carga_semanal_dias", "media_disciplina", 
+                        "desvio_padrao", "taxa_aprovacao", "taxa_reprovacao"]
+        
+        regular_cols = original_header + ["turno_predominante", "peso_final"] + base_metrics
+        irregular_cols = original_header + base_metrics
+
+        prepare_and_save_csv(regular_df, regular_cols,regular_output_path)
+        prepare_and_save_csv(irregular_df, irregular_cols, irregular_output_path)
+
+        logging.info("Pipeline de análise concluído com sucesso.")
+    except Exception as e:
+        logging.error(f"Erro ao executar o pipeline de análise: {e}")
 
 if __name__ == "__main__":
-    pasta_base = Path(__file__).parent
-    pasta_entrada = pasta_base / 'include'
-    pasta_saida = pasta_base / 'resultados'
-    pasta_saida.mkdir(exist_ok=True)
+    base_path = Path(__file__).parent
+    input_folder = base_path / 'include'
+    out_folder = base_path / 'results'
+    out_folder.mkdir(exist_ok=True)
 
-    nomes_dos_cursos_csv = [
-        "AS.csv", "CC.csv", "CSRC.csv",
-        "EC.csv", "ES.csv", "SI.csv"
-    ]
-    caminhos_entrada = [pasta_entrada / nome for nome in nomes_dos_cursos_csv]
-    caminho_mapa_blocos = pasta_base / "disciplinas-bloco.csv"
-    caminho_saida_regulares = pasta_saida / "materias_regulares_pandas.csv"
-    caminho_saida_irregulares = pasta_saida / "materias_irregulares_pandas.csv"
-    
-    analise_csv(
-        caminhos_entrada,
-        caminho_saida_regulares,
-        caminho_saida_irregulares,
-        caminho_mapa_blocos
+    input_csv_path = input_folder / "data.csv"
+
+    regular_output_path = out_folder / 'materias_regulares.csv'
+    irregular_output_path = out_folder /  'materias_irregulares.csv'
+    blocks_map_path = base_path / 'include' / 'disciplinas-bloco.csv'
+
+    run_analysis_pipeline(
+        input_path=input_csv_path,  
+        regular_output_path=regular_output_path,
+        irregular_output_path=irregular_output_path,
+        blocks_map_path=blocks_map_path
     )
