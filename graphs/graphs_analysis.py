@@ -8,6 +8,7 @@ BASE_PATH = Path(__file__).resolve().parent.parent
 RESULTS_FOLDER = BASE_PATH / 'results'
 INPUT_CSV_PATH = RESULTS_FOLDER / 'materias_regulares.csv'
 OUTPUT_PLOT_PATH = RESULTS_FOLDER / 'media_turno_bloco_inma.png'
+OUTPUT_CSV_PATH = RESULTS_FOLDER / 'analise_bloco_inma_agregado.csv'
 
 TARGET_BLOCK = 'INMA'
 
@@ -28,29 +29,49 @@ def load_data(file_path: Path) -> pd.DataFrame:
         raise FileNotFoundError(f"Arquivo de entrada não encontrado: {file_path}.")
     return pd.read_csv(file_path, encoding='utf-8')
 
-def prepare_data_for_plot(df: pd.DataFrame, target_block:str) -> pd.DataFrame:
-    logging.info(f"Preparando dados para gráfico...")
+def prepare_data_for_plot(df: pd.DataFrame, target_block: str) -> pd.DataFrame:
+    logging.info(f"Preparando dados para gráfico com média ponderada por alunos...")
     
+    COLUNA_ALUNOS = 'total_alunos_disciplina' 
+
+    if COLUNA_ALUNOS not in df.columns:
+        logging.error(f"A coluna '{COLUNA_ALUNOS}' não foi encontrada no CSV!")
+        raise KeyError(f"A coluna de alunos '{COLUNA_ALUNOS}' não existe no DataFrame.")
+
     df['media_disciplina'] = pd.to_numeric(df['media_disciplina'], errors='coerce')
-    df.dropna(subset=['media_disciplina'], inplace=True)
+    df[COLUNA_ALUNOS] = pd.to_numeric(df[COLUNA_ALUNOS], errors='coerce')
+    df.dropna(subset=['media_disciplina', COLUNA_ALUNOS], inplace=True)
+    df = df[df[COLUNA_ALUNOS] > 0].copy()
 
     df['bloco'] = df['bloco'].astype(str).str.upper()
-    analysis_df = df[(df['bloco'] == target_block.upper())].copy()
+    analysis_df = df[df['bloco'] == target_block.upper()].copy()
 
     unique_classes_df = analysis_df.drop_duplicates(
         subset=['Ano/Semestre Disciplina', 'Disciplina', 'turno_predominante']
-        )
+    )
     logging.info(f"Registros únicos de turmas encontrados: {len(unique_classes_df)}")
+    
+    if unique_classes_df.empty:
+        logging.warning("Nenhuma turma encontrada para o bloco especificado após a filtragem.")
+        return pd.DataFrame()
 
-    aggregated_df = unique_classes_df.groupby(['Ano/Semestre Disciplina', 'turno_predominante'])['media_disciplina'].agg(['mean', 'std']).reset_index()
-    aggregated_df.rename(columns={'mean': 'media_das_medias', 'std': 'desvio_padrao_das_medias'}, inplace=True)
+    unique_classes_df['soma_ponderada'] = unique_classes_df['media_disciplina'] * unique_classes_df[COLUNA_ALUNOS]
 
-    aggregated_df['desvio_padrao_das_medias'] = aggregated_df['desvio_padrao_das_medias'].fillna(0)
+    grouped = unique_classes_df.groupby(['Ano/Semestre Disciplina', 'turno_predominante'])
 
+    agg_calcs = grouped.agg(
+        soma_total_ponderada=('soma_ponderada', 'sum'),
+        soma_total_alunos=(COLUNA_ALUNOS, 'sum'),
+        desvio_padrao_das_medias=('media_disciplina', 'std')
+    ).reset_index()
+
+    agg_calcs['media_das_medias'] = agg_calcs['soma_total_ponderada'] / agg_calcs['soma_total_alunos']
+    agg_calcs['desvio_padrao_das_medias'] = agg_calcs['desvio_padrao_das_medias'].fillna(0)
+    
+    aggregated_df = agg_calcs[['Ano/Semestre Disciplina', 'turno_predominante', 'media_das_medias', 'desvio_padrao_das_medias']]
     aggregated_df = aggregated_df.sort_values(by='Ano/Semestre Disciplina')
 
-
-    logging.info(f"Dados agregados prontos para plotagem.")
+    logging.info(f"Dados agregados (média ponderada) prontos para plotagem.")
     return aggregated_df
 
 def create_performance_over_time_plot(df: pd.DataFrame, output_path: Path):
@@ -101,7 +122,17 @@ def run_block_performance_analysis():
         raw_df = load_data(INPUT_CSV_PATH)
         filtered_df = prepare_data_for_plot(raw_df, TARGET_BLOCK)
 
+        if not filtered_df.empty:
+            logging.info(f"Salvando dados agregados em arquivo CSV...")
+      
+            filtered_df.to_csv(OUTPUT_CSV_PATH, index=False, encoding='utf-8-sig')
+            logging.info(f"Dados agregados salvos com sucesso em: {OUTPUT_CSV_PATH}")
+        else:
+            logging.warning("DataFrame de análise está vazio. Nenhum arquivo CSV será gerado.")
+    
+
         create_performance_over_time_plot(filtered_df, OUTPUT_PLOT_PATH)
+        
     except FileNotFoundError as e:
         logging.error(str(e))
     except Exception as e:

@@ -2,20 +2,13 @@ import pandas as pd
 from pathlib import Path
 import logging
 
-# =============================================================================
-# 1. CONFIGURAÇÃO
-# =============================================================================
-# Aponte para o arquivo que você quer verificar.
 BASE_PATH = Path(__file__).resolve().parent.parent
 RESULTS_FOLDER = BASE_PATH / "results"
 INPUT_CSV_PATH = RESULTS_FOLDER / "materias_regulares.csv"
 
-# --- Configuração do Logging ---
+
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
-# =============================================================================
-# 2. FUNÇÕES DE VERIFICAÇÃO
-# =============================================================================
 
 def load_data(file_path: Path) -> pd.DataFrame:
     """Carrega os dados de um arquivo CSV."""
